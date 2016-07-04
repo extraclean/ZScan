@@ -6,16 +6,16 @@ public class ZScanController extends Thread {
 	 Tuple currentPosition;
 	 long speed = 100;
 	 //public static int order ;
-	public static Integer X;
-	public static Integer Y;
+	public static double X;
+	public static double Y;
 	public static float distance = 0;
 	public static float ZCdistance = 0;
 	public static float ZSdistance = 0;
-	public static Integer MBR = 0;//to calculate when to stop
-	public static Integer Hkey = 1;//to calculate when to stop
-	public static Integer ZCkey = 0;//to calculate when to stop
-	public static Integer count = 0;//to eliminate redundant key
-	public static Integer bound = 0;//the number that each two column or two row maximal redundant key
+	public static double MBR = 0;//to calculate when to stop
+	public static double Hkey = 1;//to calculate when to stop
+	public static double ZCkey = 0;//to calculate when to stop
+	public static double count = 0;//to eliminate redundant key
+	public static double bound = 0;//the number that each two column or two row maximal redundant key
 	
 	 ArrayList<Tuple> positions = new ArrayList<Tuple>();//key
 	 ArrayList<Path> trajectory = new ArrayList<Path>();//path
@@ -79,54 +79,150 @@ public class ZScanController extends Thread {
 		 currentPosition.x = 0;
 		 currentPosition.y = 0;
 		 distance = 0;
-		 // if x == odd
-		 /*if(x%2 ==1){
-		  *   if(y%2 ==1)
-		  *   {
-		  *   
-		  *   
-		  *   
-		  *   }
-		  * else{
-		  * 
-		  * 
-		  * }
-		  * 
-		  * 
-		  * 
-		  * }
-		  * 
-		  * 
-		  * 
-		  * */
+		 int i=0,j=0;
+
+		 for (i=0; i<X/2; i++) {
+			 if ((i+1)>Math.floor(X/2) && ((X+1)/2)%2==1) {
+				 for (j=0; j<Y/2; j++) {
+					 if ((currentPosition.y/4) == (Y-3)) {
+						 w();//special unit
+						 j++;
+		             }else{
+		            	 v();//take ㄑ
+		            	 if((currentPosition.y/4) != (Y-1)) Dstep();
+		             }
+				 }
+			 } else if((i+1)>Math.floor(X/2) && ((X+1)/2)%2==0){
+				 for (j=0; j<Y/2; j++) {
+					 if ((currentPosition.y/4) == 2) {
+						 re_w();//special unit
+						 j++;
+		             }else{
+		            	 re_v();//take ㄑ
+		            	 if((currentPosition.y/4) != 1) Ustep();
+		             }
+				 }
+			 }else if ((currentPosition.x/4)%4<2) {
+				 for (j=0; j<Y/2; j++) {
+					 if ((j+1)>Math.floor(Y/2)) {
+						 half_left_down();
+						 half_Z();//take ㄥ
+					 } else if ((currentPosition.x/4)%2==0) {
+						 Z();//take Z
+					 } else {
+						 sigma();//take sigma
+					 }
+					 if ((j+1)<Math.floor(Y/2)) Dstep();//??
+				 }
+				 if((currentPosition.x/4)<X-1) Rstep();
+			 } else if((currentPosition.x/4)%4>=2) {
+				 for (j=0; j<Y/2; j++) {
+					 if ((j+1)>Math.floor(Y/2)) {
+						 half_left_up();
+						 re_half_Z();//take re-ㄥ
+					 } else if (currentPosition.x%8==0) {
+						 re_Z();//take re-Z
+					 } else {
+						 re_sigma();//take sigma
+					 }
+					 if ((j+1)<Math.floor(Y/2)) Ustep();//??
+				 }
+				 if((currentPosition.x/4)<X-1) Rstep();
+			 }
+		 }
 		 
-		 if(X%2==1 && Y%2==1){
-			 if(X>Y){
-				 bound = (int)(((X-3)/2)*4);
-				 right(X, Y);
-			 }
-			 else{
-				 bound = (int)(((Y-3)/2)*4);
-				 down(X, Y);
-			 }
-		 }else  if(X%2==1 ){
-			 bound = (int)(((Y-2)/2)*4);
-			 down(X, Y);
-		 }
-		 else if(Y%2==1){
-			 bound = (int)(((X-2)/2)*4);
-			 right(X, Y);
-		 }
-		 else if(X>Y){
-			 bound = (int)(((X-2)/2)*4);
-			 right(X,Y);
-		 }
-		 else{
-			 bound = (int)(((Y-2)/2)*4);
-			 down(X, Y);
-		 }
+//		 if(X%2==1 && Y%2==1){
+//			 if(X>Y){
+//				 bound = (int)(((X-3)/2)*4);
+//				 right(X, Y);
+//			 }
+//			 else{
+//				 bound = (int)(((Y-3)/2)*4);
+//				 down(X, Y);
+//			 }
+//		 }else  if(X%2==1 ){
+//			 bound = (int)(((Y-2)/2)*4);
+//			 down(X, Y);
+//		 }
+//		 else if(Y%2==1){
+//			 bound = (int)(((X-2)/2)*4);
+//			 right(X, Y);
+//		 }
+//		 else if(X>Y){
+//			 bound = (int)(((X-2)/2)*4);
+//			 right(X,Y);
+//		 }
+//		 else{
+//			 bound = (int)(((Y-2)/2)*4);
+//			 down(X, Y);
+//		 }
 	 	}
 	 
+	 private void sigma(){
+		 Lstep();
+		 half_right_down();
+		 half_left_down();
+		 Rstep();
+	 }
+	 
+	 private void re_sigma(){
+		 Lstep();
+		 half_right_up();
+		 half_left_up();
+		 Rstep();
+	 }
+	 
+	 private void Z(){
+		 Rstep();
+		 half_left_down();
+		 half_left_down();
+		 Rstep();
+	 }
+	 
+	 private void re_Z(){
+		 Rstep();
+		 half_left_up();
+		 half_left_up();
+		 Rstep();
+	 }
+	 
+	 private void half_Z(){
+		 half_left_down();
+		 Rstep();
+	 }
+	 
+	 private void re_half_Z(){
+		 half_left_up();
+		 Rstep();
+	 }
+	 
+	 private void v(){
+		 half_left_down();
+		 half_right_down();
+	 }
+	 
+	 private void re_v(){
+		 half_left_up();
+		 half_right_up();
+	 }
+	 
+	 private void w(){
+		 half_left_down();
+		 half_right_down();
+		 half_left_down();
+		 half_right_down();
+	 }
+	 
+	 private void re_w(){
+		 half_left_up();
+		 half_right_up();
+		 half_left_up();
+		 half_right_up();
+	 }
+	 
+	 //////////////////////
+	 //Z Scan End
+	 /////////////////////
 	 private void right(int X, int Y){
 		 if(Y%2==1 && currentPosition.y ==  (Y-1)*4 && currentPosition.x == (X-2)*4 ) {//X is odd (end point)
 			 half_right_down();
@@ -420,15 +516,15 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
 		 trajectory.add(new Path(currentPosition.x,currentPosition.y));
 		 lightup();
-		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
-			 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
-			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
-			 lightup();
-		 }else{
+//		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
+//			 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
+//			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
+//			 lightup();
+//		 }else{
 			 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
-		 }
+//		 }
 
 			 count++;
 		 distance+=Math.sqrt(2)/2;
@@ -438,15 +534,15 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
 		 trajectory.add(new Path(currentPosition.x,currentPosition.y));
 		 lightup();
-		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
-			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
-			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
-			 lightup();
-		 }else{
+//		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
+//			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
+//			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
+//			 lightup();
+//		 }else{
 			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
-		 }
+//		 }
 
 			 count++;
 		 
@@ -457,15 +553,15 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
 		 trajectory.add(new Path(currentPosition.x,currentPosition.y));
 		 lightup();
-		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
-			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
-			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
-			 lightup();
-		 }else{
+//		 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
+//			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
+//			 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
+//			 lightup();
+//		 }else{
 			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
-		 }
+//		 }
 
 			 count++;
 		 
@@ -476,15 +572,15 @@ public class ZScanController extends Thread {
 			currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
 			 trajectory.add(new Path(currentPosition.x,currentPosition.y));
 			 lightup();
-			 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
-				 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
-				 lightup();
-			 }else{
+//			 if((count-2)%4 == 0 && (count -2)< bound){//if key need to be eliminate & not at the last line
+//				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
+//				 Rkey.add(new Redundant(currentPosition.x,currentPosition.y));
+//				 lightup();
+//			 }else{
 				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
 				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 				 lightup();
-			 }
+//			 }
 
 				 count++;
 			 
@@ -1145,7 +1241,7 @@ public class ZScanController extends Thread {
 //			return (Integer) X*Y-1;
 //		}
 //		
-		private Integer Zskey(){
+		private double Zskey(){
 			if(X%2==1 && Y%2 == 1){
 				if(X>Y)
 					return ((Y-1)*2+1+((Y-1)*3+2)*(X-1)/2) - ((Y-3)/2 * (X-1)/2);//last line + common line - redundant key
