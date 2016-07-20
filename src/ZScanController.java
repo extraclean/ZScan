@@ -1,21 +1,32 @@
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Random;
 
 //Controls all the ZScan curve logic
 public class ZScanController extends Thread {
 	 ArrayList<ArrayList<ColorOfSquare>> Squares= new ArrayList<ArrayList<ColorOfSquare>>();
 	 Tuple currentPosition;
-	 long speed = 100;
+	 long speed = 0;
 	 //public static int order ;
 	public static double X;
 	public static double Y;
 	public static float distance = 0;
 	public static float ZCdistance = 0;
 	public static float ZSdistance = 0;
+	public static float Hdistance = 0;
 	public static double MBR = 0;//to calculate when to stop
 	public static double Hkey = 1;//to calculate when to stop
 	public static double ZCkey = 0;//to calculate when to stop
 	public static double count = 0;//to eliminate redundant key
+	public static int sNumber = 1000;//sensor number
 	public static double bound = 0;//the number that each two column or two row maximal redundant key
+	public static Sensor[] sensor = new Sensor[sNumber];//sensor data
+	public static int key_count = 0;//計算目前是第幾個key
+	public static MB[] key = new MB[1280];//預設32S*32S(32*32有1280個key)
+	public static int Rc = 100;//通訊半徑設為10m
+	private int flag = 0;//決定要不要使用timeout
+	private int APT = 0;//如果要用ＡＰＴ改成1
 	
 	 ArrayList<Tuple> positions = new ArrayList<Tuple>();//key
 	 ArrayList<Path> trajectory = new ArrayList<Path>();//path
@@ -30,16 +41,144 @@ public class ZScanController extends Thread {
 		currentPosition=new Tuple(positionDepart.x,positionDepart.y);
 		Tuple headPos = new Tuple(currentPosition.getX(),currentPosition.getY());
 		positions.add(headPos);
+		for(int i=0; i< key.length;i++)
+			key[i] = new MB(0, 0, Rc);
 	 }
 	 
 	 //run
 	 public void run() {//determine which algorithm & function to run
+		//Readsensor();
 //		 ZCdetermine();
-		 ZSdetermine();
+		 
 //		 Hdetermine();
 		// showLength();
-//		 showKey();
-		// average();
+				 
+		 deploySensor();
+		 readSensor();
+		 
+		 RWP();
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count); 
+		 System.out.println("length: "+distance);
+		 flush();
+		 
+		 Scan();
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count); 
+		 System.out.println("length: "+distance);
+		 flush();
+		 
+		 doubleScan();
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count); 
+		 System.out.println("length: "+distance);
+		 flush();
+		 
+		 flag = 1;
+		 ZSdetermine();
+		 writeEstimate("ZSestimate.txt");
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count); 
+		 System.out.println("length: "+ZSdistance);
+//		 System.out.println(key_count); 
+//		 System.out.println(ZSdistance);
+		 flush();
+		 
+		 flag = 1;
+		 Hdetermine();
+		 writeEstimate("Hestimate.txt");
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count);
+		 System.out.println("length: "+Hdistance);
+//		 System.out.println(key_count);
+//		 System.out.println(Hdistance);
+		 
+		 flush();
+		 flag =1;
+		 ZCdetermine();
+		 writeEstimate("ZCestimate.txt");
+		 System.out.println(Simulation.errorRate());
+		 System.out.println(Simulation.coverage());
+		 System.out.println("key: "+key_count);
+		 System.out.println("length: "+ZCdistance);
+//		 System.out.println(key_count);
+//		 System.out.println(ZCdistance);
+		 
+		 //average();//跑1000次會花非常多時間，小心用
+	 }
+	 
+	 private void flush(){//清空key
+		 key_count = 0;
+		 distance = 0;
+		 for(int i =0;i<1000;i++){
+			 for(int j=0;j<100;j++){
+				 sensor[i].queue[j].ChangeData(0,0);
+				 sensor[i].qCount = 0;
+				 sensor[i].timeout = 0;
+				 sensor[i].ChangeEstimate(-1, -1);
+			 }
+		 }
+	 }
+	 
+	 private void deploySensor(){
+		 try {//佈點
+			Simulation.deployment(X*Simulation.step(), Y*Simulation.step(), sNumber);//X,Y,sensor number
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	 }
+	 
+	 private void readSensor(){
+		 
+		 for(int i=0; i< sensor.length;i++)
+			    sensor[i] = new Sensor(0, 0);
+		 try {//讀點
+			Simulation.readSensor();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	 }
+	 
+	 private void writeEstimate(String name){
+		 try {
+				FileWriter fw = new FileWriter(name);
+				 for(int i =0 ; i<sNumber ; i++){
+				 			fw.write((double) (sensor[i].getXe())+",");
+				 	        fw.write((double) (sensor[i].getYe())+"\r\n");
+				 }
+				 	        fw.flush();
+				 	        fw.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+	 }
+	 
+	 private void initialKey(){
+		 
+		 key[key_count].ChangeData(((currentPosition.x*0.25)+0.5)*Simulation.step(), ((currentPosition.y*0.25)+0.5)*Simulation.step());
+		 for(int i =0;i<sensor.length;i++){
+			 if(Simulation.Rc(Rc)>=Simulation.distance(sensor[i], key[key_count])){
+//			 if(Rc>=Simulation.distance(i, key_count)){
+				 sensor[i].addQ(key[key_count].getX(), key[key_count].getY());
+				 sensor[i].timeout++;
+			 }
+			 if(APT==0&&sensor[i].timeout>=6&&sensor[i].getXe()==0&&sensor[i].getYe()==0&&flag==0){
+				 sensor[i].drop();//timeout system triggered
+			 }
+			 if(APT==0&&sensor[i].qCount>=2){
+				 Localization.TPT(i);//每個key執行定位
+				 //Localization.WCL(i);
+			 }
+			 if(APT==1){
+				 Localization.APT(i);
+			 }
+		 }
+		 key_count++;
 	 }
 	 
 	 //delay for all the steps
@@ -53,34 +192,179 @@ public class ZScanController extends Thread {
 	 
 	 //display the newest position
 	 private void lightup(){
-		 for(Tuple t : positions){
-			 int y = t.getX();
-			 int x = t.getY();
-			 Squares.get(x).get(y).lightMeUp(0); //0: red
+//		 for(Tuple t : positions){
+//			 int y = t.getX();
+//			 int x = t.getY();
+//			 Squares.get(x).get(y).lightMeUp(0); //0: red
+//		 }
+//		 for(Path t : trajectory){
+//			 int y = t.getX();
+//			 int x = t.getY();
+//			 Squares.get(x).get(y).lightMeUp(3); // 3: black
+//		 }
+//		 for(Redundant t : Rkey){
+//			 int y = t.getX();
+//			 int x = t.getY();
+//			 Squares.get(x).get(y).lightMeUp(2); // 2: green
+//		 }
+//		 pauser();
+	}
+	 
+	 
+//////////////////////////////////////////////////////////
+//Circle START
+/////////////////////////////////////////////////////////
+	 private void Circle(){
+		 key[key_count].ChangeData(((currentPosition.x*0.25)+0.5)*Simulation.step(), ((currentPosition.y*0.25)+0.5)*Simulation.step());
+		 for(int i =0;i<sensor.length;i++){
+			 if(Simulation.Rc(Rc)>=Simulation.distance(sensor[i], key[key_count])){
+//		 if(Rc>=Simulation.distance(i, key_count)){
+				 sensor[i].addQ(key[key_count].getX(), key[key_count].getY());
+				 sensor[i].timeout++;
+			 }
+			 if(APT==0&&sensor[i].timeout>=6&&sensor[i].getXe()==0&&sensor[i].getYe()==0&&flag==0){
+				 sensor[i].drop();//timeout system triggered
+			 }
+			 if(APT==0&&sensor[i].qCount>=2){
+				 Localization.TPT(i);//每個key執行定位
+				 //Localization.WCL(i);
+			 }
+			 if(APT==1){
+				 Localization.APT(i);
+			 }
+	 		}
+	 	key_count++;
+	 }
+//////////////////////////////////////////////////////////
+//Circle END
+/////////////////////////////////////////////////////////
+	 
+//////////////////////////////////////////////////////////
+//RWP START
+/////////////////////////////////////////////////////////
+	 private void RWP(){
+		 int i = 300;
+		 distance = 0;
+		 int tmpX,tmpY;
+		 while(i!=0){
+			tmpX = currentPosition.x;
+			tmpY = currentPosition.y;
+			currentPosition.ChangeData((int)(Math.random()*(X*4)),(int)(Math.random()*(Y*4)));
+		 	positions.add(new Tuple(currentPosition.x,currentPosition.y));
+		 	lightup();
+		 	distance += Math.sqrt(Math.pow(currentPosition.x-tmpX, 2)+Math.pow(currentPosition.y-tmpY, 2));
+		 	initialKey();//key broadcast to sensors
+		 	i--;
 		 }
-		 for(Path t : trajectory){
-			 int y = t.getX();
-			 int x = t.getY();
-			 Squares.get(x).get(y).lightMeUp(3); // 3: black
-		 }
-		 for(Redundant t : Rkey){
-			 int y = t.getX();
-			 int x = t.getY();
-			 Squares.get(x).get(y).lightMeUp(2); // 2: green
-		 }
-		 pauser();
-		 }
+	 }
+	 
+//////////////////////////////////////////////////////////
+//RWP END
+/////////////////////////////////////////////////////////
+	 
+	 
+//////////////////////////////////////////////////////////
+//Scan START
+/////////////////////////////////////////////////////////
+
+	 	private void Scan(){
+	 		currentPosition.x = 0;
+	 		currentPosition.y = 0;
+			distance = 0;
+			 
+	 		initialKey();
+	 		
+	 		while(currentPosition.x/4<(X-1)){
+	 			while(currentPosition.y/4<(Y-1))
+	 				Dstep();
+	 			if(currentPosition.x/4<(X-1)){
+	 				Rstep();
+	 				while(currentPosition.y/4>0)
+	 					Ustep();
+	 			}
+	 			if(currentPosition.x/4<(X-1))
+	 				Rstep();
+	 		}
+	 	}
+	 
+//////////////////////////////////////////////////////////
+//Scan END
+/////////////////////////////////////////////////////////
+	 	
+//////////////////////////////////////////////////////////
+//Double Scan START
+/////////////////////////////////////////////////////////
+
+	 	private void doubleScan(){
+	 		currentPosition.x = 0;
+	 		currentPosition.y = 0;
+	 		distance = 0;
+
+	 		initialKey();
+
+	 		while(currentPosition.x/4<(X-2)){
+	 			while(currentPosition.y/4<(Y-1))
+	 				Dstep();
+	 			if(currentPosition.x/4<(X-1)){
+	 				Rstep();
+	 				Rstep();
+	 				while(currentPosition.y/4>0)
+	 					Ustep();
+	 			}
+	 			if(currentPosition.x/4<(X-2)){
+	 				Rstep();
+	 				Rstep();
+	 			}
+	 		}
+	 		if(currentPosition.y==0){
+	 			while(currentPosition.y/4<(Y-2)){
+	 				while(currentPosition.x/4>0)
+	 					Lstep();
+	 				if(currentPosition.y/4<(Y-1)){
+	 					Dstep();
+	 					Dstep();
+	 					while(currentPosition.x/4<(X-1))
+	 						Rstep();
+	 				}
+	 				if(currentPosition.y/4<(Y-2)){
+	 					Dstep();
+	 					Dstep();
+	 				}
+	 			}
+	 		}else{
+	 			while(currentPosition.y/4>1){
+	 				while(currentPosition.x/4>0)
+	 					Lstep();
+	 				if(currentPosition.y/4>0){
+	 					Ustep();
+	 					Ustep();
+	 					while(currentPosition.x/4<(X-1))
+	 						Rstep();
+	 				}
+	 				if(currentPosition.y/4>0){
+	 					Ustep();
+	 					Ustep();
+	 				}
+	 			}
+	 		}
+	 	}
+
+//////////////////////////////////////////////////////////
+//Double Scan END
+/////////////////////////////////////////////////////////
 	 
 		//////////////////////////////////////////////////////////
 		//Z SCAN START
 		/////////////////////////////////////////////////////////
-	 private void ZSdetermine(){//TODO change line or run special case
+	 private void ZSdetermine(){
 		 ZSdistance = 0;
 		 currentPosition.x = 0;
 		 currentPosition.y = 0;
 		 distance = 0;
 		 int i=0,j=0;
 
+		 initialKey();
+		 
 		 for (i=0; i<X/2; i++) {
 			 if ((i+1)>Math.floor(X/2) && ((X+1)/2)%2==1) {
 				 for (j=0; j<Y/2; j++) {
@@ -163,6 +447,7 @@ public class ZScanController extends Thread {
 		 half_right_down();
 		 half_left_down();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void re_sigma(){
@@ -170,6 +455,7 @@ public class ZScanController extends Thread {
 		 half_right_up();
 		 half_left_up();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void Z(){
@@ -177,6 +463,7 @@ public class ZScanController extends Thread {
 		 half_left_down();
 		 half_left_down();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void re_Z(){
@@ -184,26 +471,31 @@ public class ZScanController extends Thread {
 		 half_left_up();
 		 half_left_up();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void half_Z(){
 		 half_left_down();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void re_half_Z(){
 		 half_left_up();
 		 Rstep();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void v(){
 		 half_left_down();
 		 half_right_down();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void re_v(){
 		 half_left_up();
 		 half_right_up();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void w(){
@@ -211,6 +503,7 @@ public class ZScanController extends Thread {
 		 half_right_down();
 		 half_left_down();
 		 half_right_down();
+		 ZSdistance = distance;
 	 }
 	 
 	 private void re_w(){
@@ -218,6 +511,7 @@ public class ZScanController extends Thread {
 		 half_right_up();
 		 half_left_up();
 		 half_right_up();
+		 ZSdistance = distance;
 	 }
 	 
 	 //////////////////////
@@ -389,6 +683,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance++;
 	 }
@@ -406,6 +701,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance+=Math.sqrt(2);
 	 }
@@ -423,6 +719,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance+=Math.sqrt(2);
 	 }
@@ -440,6 +737,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance++;
 	 }
@@ -457,6 +755,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance++;
 	 }
@@ -474,6 +773,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance++;
 	 }
@@ -491,6 +791,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance+=Math.sqrt(2);
 	 }
@@ -508,6 +809,7 @@ public class ZScanController extends Thread {
 		 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
 		 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 lightup();
+		 initialKey();//key broadcast to sensors
 		 
 		 distance+=Math.sqrt(2);
 	 }
@@ -524,6 +826,7 @@ public class ZScanController extends Thread {
 			 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y-1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
+			 initialKey();//key broadcast to sensors
 //		 }
 
 			 count++;
@@ -542,6 +845,7 @@ public class ZScanController extends Thread {
 			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y-1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
+			 initialKey();//key broadcast to sensors
 //		 }
 
 			 count++;
@@ -561,6 +865,7 @@ public class ZScanController extends Thread {
 			 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y+1);
 			 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 			 lightup();
+			 initialKey();//key broadcast to sensors
 //		 }
 
 			 count++;
@@ -580,6 +885,7 @@ public class ZScanController extends Thread {
 				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y+1);
 				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
 				 lightup();
+				 initialKey();
 //			 }
 
 				 count++;
@@ -598,6 +904,7 @@ public class ZScanController extends Thread {
 			currentPosition.x = 0;
 			currentPosition.y = 0;
 			MBR = 0;
+			initialKey();
 			 if(X > Y)
 				 down((int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2)));
 			 else 
@@ -612,7 +919,7 @@ public class ZScanController extends Thread {
 				return 0;
 			}
 			Hkey++;
-			 if(currentPosition.getX() <= (X-1)*2 && currentPosition.getY() <= (Y-1)*2)
+			 if(currentPosition.getX() <= (X-1)*4 && currentPosition.getY() <= (Y-1)*4)
 				 MBR++;
 			 if(MBR >= (X*Y)){
 				Hkey--;
@@ -627,56 +934,32 @@ public class ZScanController extends Thread {
 			 if(m==1){
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
 			 }
 			 else{
 				 if(down(m-1) == -1)
 						 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(right(m-1) == -1)
 				 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(right(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(up(m-1) == -1)
 					 return -1;
 			 }
@@ -688,56 +971,32 @@ public class ZScanController extends Thread {
 			 if(m==1){
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
 			 }
 			 else{
 				 if(up(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(left(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(left(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(down(m-1) == -1)
 					 return -1;
 			 }
@@ -749,56 +1008,32 @@ public class ZScanController extends Thread {
 			 if(m==1){
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
 			 }
 			 else{
 				 if(left(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(up(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y-1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Ustep();
+				 Hdistance = distance;
 				 if(up(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(right(m-1) == -1)
 					 return -1;
 			 }
@@ -810,56 +1045,32 @@ public class ZScanController extends Thread {
 			 if(m==1){
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(checkMBR() == -1)
 					 return -1;
 			 }
 			 else{
 				 if(right(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x+1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Rstep();
+				 Hdistance = distance;
 				 if(down(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x,currentPosition.y+1);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Dstep();
+				 Hdistance = distance;
 				 if(down(m-1) == -1)
 					 return -1;
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
-				 currentPosition.ChangeData(currentPosition.x-1,currentPosition.y);
-				 positions.add(new Tuple(currentPosition.x,currentPosition.y));
-				 lightup();
+				 Lstep();
+				 Hdistance = distance;
 				 if(left(m-1) == -1)
 					 return -1;
 			 }
@@ -878,6 +1089,7 @@ public class ZScanController extends Thread {
 				currentPosition.x = 0;
 				currentPosition.y = 0;
 				MBR = 0;
+				initialKey();
 				 if(X > Y)
 					 ZCdown((int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2)));
 				 else 
@@ -1227,151 +1439,45 @@ public class ZScanController extends Thread {
 			//Z Curve END
 			/////////////////////////////////////////////////////////
 			
-		private float LMAT(){
-			//TODO
-			return Math.min(0, 0);
-		}
-		
-//		private float ZCurve(){
-//			return (float) (Math.ceil(Math.pow(4, Math.ceil(Math.sqrt(Math.max(X, Y)))) * 5/8) - 1 + 
-//					Math.floor(Math.pow(4, Math.ceil(Math.sqrt(Math.max(X, Y)))) * 3 / 8) * Math.sqrt(2));
-//		}
-		
-//		private Integer  Hilbert(){
-//			return (Integer) X*Y-1;
-//		}
-//		
-		private double Zskey(){
-			if(X%2==1 && Y%2 == 1){
-				if(X>Y)
-					return ((Y-1)*2+1+((Y-1)*3+2)*(X-1)/2) - ((Y-3)/2 * (X-1)/2);//last line + common line - redundant key
-				else
-					return (X-1)*2+1+((X-1)*3+2)*(Y-1)/2 - ((X-3)/2 * (Y-1)/2);
-			}else if(X%2==1 ){	
-				return ((X-1)*3+2)*Y/2 - ((X-3)/2 * Y/2);
-			}else if(Y%2 == 1){
-				return ((Y-1)*3+2)*X/2 - ((Y-3)/2 * X/2);
-			}else{
-				return ((Y-1)*3+2)*X/2 - ((Y-2)/2 * X/2);
-			}
-		}
-		
-		private void redundantKey(){//TODO
-			
-		}
-		
-//		private Integer Zckey(){
-//			if(X  <= 2 &&  Y <= 2)
-//				return 5;
-//				else
-//					return (int) (Math.pow( Math.pow(2 , (int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2))), 2) / 4 * 5);
-//		}
-//		
-//		private Integer Hkey(){
-//			 
-//			if(X  <= 2 &&  Y <= 2)
-//				return 4;
-//				else
-//					return (int) (Math.pow( Math.pow(2 ,  (int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2))), 2));
-//		}
-		
-		private void showLength(){
-			System.out.print("X: " + X + "  ");
-			System.out.println("Y: " + Y);
-			System.out.println("--------------------------------------------");
-			System.out.println("Length ");
-			System.out.println("--------------------------------------------");
-			System.out.print("Z scan: ");
-			System.out.println(ZSdistance);
-			System.out.print("Z curve: ");
-			System.out.println(ZCdistance);
-			System.out.print("Hilbert: ");
-			System.out.println(Hkey-1);
-//			System.out.print("Scan: ");
-//			System.out.println(X*Y - 1);
-//			//TODO LMAT
-//			System.out.print("LMAT: ");
-//			System.out.println(LMAT());
-			System.out.println("--------------------------------------------");
-		}
-		
-		private void showKey(){		
-			System.out.println("Key ");
-			System.out.println("--------------------------------------------");
-			System.out.print("Z scan: ");
-			System.out.println(Zskey());
-			System.out.print("Z curve: ");
-			System.out.println(ZCkey);
-			System.out.print("Hilbert: ");
-			System.out.println(Hkey);
-//			System.out.print("Scan: ");
-//			System.out.println(X*Y );
-////			//TODO LMAT
-//			System.out.print("LMAT: ");
-//			System.out.println(LMAT());
-			System.out.println("+++++++++++++++++++++++++");
-		}
-		
 		private void average(){
 			int i =0;
 			float ZCtmp = 0, ZStmp = 0, Htmp = 0;
-			float ZCtmpkey = 0, ZStmpkey = 0;
-			while(i<1000){
+			float ZCtmpkey = 0, ZStmpkey = 0,Htmpkey = 0;
+			while(i<1000){//原本是一千
 				System.out.println("round  " + i);
-				X = (int)(Math.random()*100+1);
-				Y = (int)(Math.random()*100+1);
+				X = (int)(Math.random()*32);
+				Y = (int)(Math.random()*32);
 				 ZCdetermine();
 				 ZCtmp += ZCdistance;
-				 ZCtmpkey += ZCkey;
+				 ZCtmpkey += key_count;
+				 flush();
 				 ZSdetermine();
 				 ZStmp += ZSdistance;
-				 ZStmpkey += Zskey();
+				 ZStmpkey += key_count;
+				 flush();
 				 Hdetermine();
-				 Htmp += Hkey-1;
+				 Htmp += Hdistance;
+				 Htmpkey += key_count;
+				 flush();
 				 i++;
 			}
 			System.out.println("--------------------------------------------");
 			System.out.println("Average Length ");
 			System.out.println("--------------------------------------------");
 			System.out.print("Z scan: ");
-			System.out.println(ZStmp/100);
+			System.out.println(ZStmp/1000);
 			System.out.print("Z curve: ");
-			System.out.println(ZCtmp/100);
+			System.out.println(ZCtmp/1000);
 			System.out.print("Hilbert: ");
-			System.out.println(Htmp/100);
+			System.out.println(Htmp/1000);
 			System.out.println("--------------------------------------------");
 			System.out.println("Average Key ");
 			System.out.println("--------------------------------------------");
 			System.out.print("Z scan: ");
-			System.out.println(ZStmpkey/100);
+			System.out.println(ZStmpkey/1000);
 			System.out.print("Z curve: ");
-			System.out.println(ZCtmpkey/100);
+			System.out.println(ZCtmpkey/1000);
 			System.out.print("Hilbert: ");
-			System.out.println((Htmp+1)/100);
+			System.out.println((Htmpkey)/1000);
 		}
-		
-//		private void averageKey(){
-//			int i =0;
-//			float ZCtmpkey = 0, ZStmpkey = 0, Htmpkey = 0;
-//			while(i<100){
-//				X = (int)(Math.random()*32+1);
-//				Y = (int)(Math.random()*32+1);
-//				 ZCdetermine();
-//				 ZCtmpkey += ZCkey;
-//				 ZSdetermine();
-//				 ZStmpkey += Zskey();
-//				 Hdetermine();
-//				 Htmpkey += Hkey;
-//				 i++;
-//			}
-//			System.out.println("--------------------------------------------");
-//			System.out.println("Average Key ");
-//			System.out.println("--------------------------------------------");
-//			System.out.print("Z scan: ");
-//			System.out.println(ZStmpkey/100);
-//			System.out.print("Z curve: ");
-//			System.out.println(ZCtmpkey/100);
-//			System.out.print("Hilbert: ");
-//			System.out.println(Htmpkey/100);
-//		}
 }
