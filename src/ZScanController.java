@@ -26,11 +26,17 @@ public class ZScanController extends Thread {
 	public static MB[] key = new MB[1280];//預設32S*32S(32*32有1280個key)
 	public static int Rc = 100;//通訊半徑設為10m
 	private int flag = 0;//決定要不要使用timeout
-	private int APT = 0;//如果要用ＡＰＴ改成1
+	
+	private int technique = 1;//如果要用ＴＰＴ改成0,如果要用ＡＰＴ改成1,如果要用ＷＣＬ改成2
+	public static double RD = Math.sqrt((double)(2)/5);//Rc/d ratio 1.5 1 2/3 sqrt(2/5) 0.5 2/5 1/3
+	
+	public static int collinear = 0;//計算共線感測器數量
+	private static double tmpError = 0;
+	private static double tmpCoverage = 0;
+	private int averageTime = 100;
 	
 	 ArrayList<Tuple> positions = new ArrayList<Tuple>();//key
 	 ArrayList<Path> trajectory = new ArrayList<Path>();//path
-	 ArrayList<Redundant> Rkey = new ArrayList<Redundant>(); //Redundant key
 	 
 	 //Constructor  
 	 ZScanController(Tuple positionDepart){
@@ -40,6 +46,7 @@ public class ZScanController extends Thread {
 		//get the current position
 		currentPosition=new Tuple(positionDepart.x,positionDepart.y);
 		Tuple headPos = new Tuple(currentPosition.getX(),currentPosition.getY());
+		//Tuple headPos = new Tuple(2,0);
 		positions.add(headPos);
 		for(int i=0; i< key.length;i++)
 			key[i] = new MB(0, 0, Rc);
@@ -47,86 +54,187 @@ public class ZScanController extends Thread {
 	 
 	 //run
 	 public void run() {//determine which algorithm & function to run
-		//Readsensor();
-//		 ZCdetermine();
-		 
-//		 Hdetermine();
-		// showLength();
-				 
+		 int count = 3;
 		 deploySensor();
 		 readSensor();
-		 
-		 RWP();
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count); 
-		 System.out.println("length: "+distance);
-		 flush();
-		 
-		 Scan();
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count); 
-		 System.out.println("length: "+distance);
-		 flush();
-		 
-		 doubleScan();
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count); 
-		 System.out.println("length: "+distance);
-		 flush();
-		 
-		 flag = 1;
-		 ZSdetermine();
-		 writeEstimate("ZSestimate.txt");
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count); 
-		 System.out.println("length: "+ZSdistance);
-//		 System.out.println(key_count); 
-//		 System.out.println(ZSdistance);
-		 flush();
-		 
-		 flag = 1;
-		 Hdetermine();
-		 writeEstimate("Hestimate.txt");
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count);
-		 System.out.println("length: "+Hdistance);
-//		 System.out.println(key_count);
-//		 System.out.println(Hdistance);
-		 
-		 flush();
-		 flag =1;
-		 ZCdetermine();
-		 writeEstimate("ZCestimate.txt");
-		 System.out.println(Simulation.errorRate());
-		 System.out.println(Simulation.coverage());
-		 System.out.println("key: "+key_count);
-		 System.out.println("length: "+ZCdistance);
-//		 System.out.println(key_count);
-//		 System.out.println(ZCdistance);
-		 
+		
+//		 while(count!=0){
+//			 if(count == 3){
+//				 technique = 0;
+//				 System.out.println("TPT");
+//				 System.out.println("=========");
+//			 }else if(count == 2){
+//				 technique = 1;
+//				 System.out.println("APT");
+//				 System.out.println("=========");
+//			 }else if(count == 1){
+//				 technique = 2;
+//				 System.out.println("WCL");
+//				 System.out.println("=========");
+//			 }
+//			 int num = 7;
+//			 
+//			 while(num!=0){
+//				 if(num==7){
+//					 RD=1.5;
+//					 System.out.println("RD=0.66");
+//					 System.out.println("=========");
+//				 }else if(num==6){
+//					 RD = 1;
+//					 System.out.println("RD=1");
+//					 System.out.println("=========");
+//				 }else if(num==5){
+//					 RD = (double)(2)/3;
+//					 System.out.println("RD=1.5");
+//					 System.out.println("=========");
+//				 }else if(num==4){
+//					 RD = Math.sqrt((double)2/5);
+//					 System.out.println("RD=1.58113");
+//					 System.out.println("=========");
+//				 }else if(num==3){
+//					 RD = 0.5;
+//					 System.out.println("RD=2");
+//					 System.out.println("=========");
+//				 }else if(num==2){
+//					 RD = (double)(2)/5;
+//					 System.out.println("RD=2.5");
+//					 System.out.println("=========");
+//				 }else if(num==1){
+//					 RD = (double)(1)/3;
+//					 System.out.println("RD=3");
+//					 System.out.println("=========");
+//				 }
+				 
+				 flush();
+				 for(int i=0;i<averageTime;i++){
+					 RWP();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 System.out.println("RWP:");
+				 show(tmpError,tmpCoverage);
+				 
+				 for(int i=0;i<averageTime;i++){
+					 Scan();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 System.out.println("Scan:");
+				 show(tmpError,tmpCoverage);
+				 
+				 for(int i=0;i<averageTime;i++){
+					 doubleScan();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 System.out.println("Double Scan:");
+				 show(tmpError,tmpCoverage);
+				 
+				 flag = 1;
+				 for(int i=0;i<averageTime;i++){
+					 ZSdetermine();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 //writeEstimate("ZSestimate.txt");
+				 System.out.println("Z Scan:");
+				 show(tmpError,tmpCoverage);
+				 
+				 flag = 0;
+				 for(int i=0;i<averageTime;i++){
+					 Hdetermine();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 //writeEstimate("Hestimate.txt");
+				 System.out.println("Hilbert:");
+				 show(tmpError,tmpCoverage);
+				 
+				 flag =0;
+				 for(int i=0;i<averageTime;i++){
+					 ZCdetermine();
+					 tmpError += Simulation.errorRate();
+					 tmpCoverage += Simulation.coverage();
+					 for(int j=0;j<sensor.length;j++){
+						 Localization.collinearity(j);
+					 }
+					 flush();
+				 }
+				 //writeEstimate("ZCestimate.txt");
+				 System.out.println("Z Curve:");
+				 show(tmpError,tmpCoverage);
+				 
+//				 num--;
+//			 }
+//		 count--;
+//		 }
 		 //average();//跑1000次會花非常多時間，小心用
+	 }
+	 
+	 private void APT(){
+		 if(technique==1){//APT
+			 for(int i =0;i<sensor.length;i++){
+				 if(sensor[i].qCount>=2)
+					 Localization.APT(i);
+			 }
+		 }
+	 }
+	 
+	 private void show(double errorRate, double coverage){
+		 System.out.println(errorRate/averageTime);
+		 System.out.println(coverage/averageTime);
+		 System.out.println(((double)(collinear)/sNumber)/averageTime);
+//		 System.out.println("key: "+key_count); 
+//		 System.out.println("length: "+distance);
+		 
+//		 System.out.println(sensor[0].getX()+","+sensor[0].getY());
+//		 System.out.println(sensor[0].getXe()+","+sensor[0].getYe());
+//		 for(int i=0;i<25;i++){
+//			 if(sensor[0].queue[i].getX()!=-1)
+//			 System.out.println(sensor[0].queue[i].getX()+","+sensor[0].queue[i].getY());
+//		 }
+		 tmpError = 0;
+		 tmpCoverage = 0;
+		 collinear = 0;
 	 }
 	 
 	 private void flush(){//清空key
 		 key_count = 0;
 		 distance = 0;
+		 
 		 for(int i =0;i<1000;i++){
 			 for(int j=0;j<100;j++){
-				 sensor[i].queue[j].ChangeData(0,0);
-				 sensor[i].qCount = 0;
-				 sensor[i].timeout = 0;
-				 sensor[i].ChangeEstimate(-1, -1);
+				 sensor[i].queue[j].ChangeData(-1,-1);
 			 }
+			 sensor[i].qCount = 0;
+			 sensor[i].timeout = 0;
+			 sensor[i].ChangeEstimate(-1, -1);
 		 }
 	 }
 	 
 	 private void deploySensor(){
 		 try {//佈點
+			  
 			Simulation.deployment(X*Simulation.step(), Y*Simulation.step(), sNumber);//X,Y,sensor number
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -135,8 +243,10 @@ public class ZScanController extends Thread {
 	 
 	 private void readSensor(){
 		 
-		 for(int i=0; i< sensor.length;i++)
+		 for(int i=0; i< sensor.length;i++){
 			    sensor[i] = new Sensor(0, 0);
+			    sensor[i].ChangeEstimate(-1, -1);
+		 }
 		 try {//讀點
 			Simulation.readSensor();
 		} catch (IOException e) {
@@ -162,21 +272,34 @@ public class ZScanController extends Thread {
 		 
 		 key[key_count].ChangeData(((currentPosition.x*0.25)+0.5)*Simulation.step(), ((currentPosition.y*0.25)+0.5)*Simulation.step());
 		 for(int i =0;i<sensor.length;i++){
+			 if(sensor[i].checkTimeout==1){
+				 sensor[i].timeout++;
+			 }
+			 if((technique==0||technique==2)&&sensor[i].timeout>=6&&sensor[i].getXe()==-1&&flag==1){	 
+				 sensor[i].drop();//timeout system triggered
+				 //System.out.println("work");
+			 }
 			 if(Simulation.Rc(Rc)>=Simulation.distance(sensor[i], key[key_count])){
 //			 if(Rc>=Simulation.distance(i, key_count)){
 				 sensor[i].addQ(key[key_count].getX(), key[key_count].getY());
-				 sensor[i].timeout++;
+				 if(sensor[i].qCount == 1)
+					 sensor[i].checkTimeout = 1;
+//				 if(sensor[i].getXe()==-1)
+//					 System.out.println(sensor[i].timeout);
 			 }
-			 if(APT==0&&sensor[i].timeout>=6&&sensor[i].getXe()==0&&sensor[i].getYe()==0&&flag==0){
-				 sensor[i].drop();//timeout system triggered
-			 }
-			 if(APT==0&&sensor[i].qCount>=2){
+//			 if((technique==0||technique==2)&&sensor[i].timeout>=5&&sensor[i].getXe()==-1&&sensor[i].getYe()==-1&&flag==1){
+//				 sensor[i].drop();//timeout system triggered
+//				 System.out.println("work");
+//			 }
+			 if(technique==0&&sensor[i].qCount>=2){
 				 Localization.TPT(i);//每個key執行定位
-				 //Localization.WCL(i);
 			 }
-			 if(APT==1){
-				 Localization.APT(i);
+			 if(technique==2&&sensor[i].qCount>=2){//每個key執行定位
+				 Localization.WCL(i);
 			 }
+//			 if(technique==1){
+//				 Localization.APT(i);
+//			 }
 		 }
 		 key_count++;
 	 }
@@ -222,14 +345,17 @@ public class ZScanController extends Thread {
 				 sensor[i].addQ(key[key_count].getX(), key[key_count].getY());
 				 sensor[i].timeout++;
 			 }
-			 if(APT==0&&sensor[i].timeout>=6&&sensor[i].getXe()==0&&sensor[i].getYe()==0&&flag==0){
+			 if((technique==0||technique==2)&&sensor[i].timeout>=6&&sensor[i].getXe()==0&&sensor[i].getYe()==0&&flag==1){
 				 sensor[i].drop();//timeout system triggered
 			 }
-			 if(APT==0&&sensor[i].qCount>=2){
+			 if(technique==0&&sensor[i].qCount>=2){
 				 Localization.TPT(i);//每個key執行定位
 				 //Localization.WCL(i);
 			 }
-			 if(APT==1){
+			 if(technique==2&&sensor[i].qCount>=2){
+				 Localization.WCL(i);
+			 }
+			 if(technique==1){
 				 Localization.APT(i);
 			 }
 	 		}
@@ -243,12 +369,23 @@ public class ZScanController extends Thread {
 //RWP START
 /////////////////////////////////////////////////////////
 	 private void RWP(){
-		 int i = 300;
+		  
+		 int i = (int) (X*Y);
+//		 if(X%2==0&&Y%2==0){
+//			 i=(int) ((X/2)*(Y/2)*5);
+//		 }else if(X%2==1&&Y%2==0){
+//			 i=(int) (((X-1)/2)*(Y/2)*5+(Y/2)*3);
+//		 }else if (X%2==0&&Y%2==1){
+//			 i=(int) ((X/2)*((Y-1)/2)*5+(X/2)*3);
+//		 }else{
+//			 i=(int) (((X-1)/2)*((Y-1)/2)*5+(X/2)*3+(Y/2)*3+2);
+//		 }
 		 distance = 0;
 		 int tmpX,tmpY;
 		 while(i!=0){
 			tmpX = currentPosition.x;
 			tmpY = currentPosition.y;
+			 
 			currentPosition.ChangeData((int)(Math.random()*(X*4)),(int)(Math.random()*(Y*4)));
 		 	positions.add(new Tuple(currentPosition.x,currentPosition.y));
 		 	lightup();
@@ -256,6 +393,7 @@ public class ZScanController extends Thread {
 		 	initialKey();//key broadcast to sensors
 		 	i--;
 		 }
+		 APT();
 	 }
 	 
 //////////////////////////////////////////////////////////
@@ -273,7 +411,7 @@ public class ZScanController extends Thread {
 			distance = 0;
 			 
 	 		initialKey();
-	 		
+	 		 
 	 		while(currentPosition.x/4<(X-1)){
 	 			while(currentPosition.y/4<(Y-1))
 	 				Dstep();
@@ -285,6 +423,7 @@ public class ZScanController extends Thread {
 	 			if(currentPosition.x/4<(X-1))
 	 				Rstep();
 	 		}
+	 		APT();
 	 	}
 	 
 //////////////////////////////////////////////////////////
@@ -296,12 +435,15 @@ public class ZScanController extends Thread {
 /////////////////////////////////////////////////////////
 
 	 	private void doubleScan(){
-	 		currentPosition.x = 0;
+	 		currentPosition.x = 2;
 	 		currentPosition.y = 0;
 	 		distance = 0;
 
+	 		Tuple headPos = new Tuple(currentPosition.getX(),currentPosition.getY());
+	 		positions.add(headPos);
+	 		
 	 		initialKey();
-
+ 
 	 		while(currentPosition.x/4<(X-2)){
 	 			while(currentPosition.y/4<(Y-1))
 	 				Dstep();
@@ -316,7 +458,11 @@ public class ZScanController extends Thread {
 	 				Rstep();
 	 			}
 	 		}
-	 		if(currentPosition.y==0){
+	 		if(currentPosition.y/4>0)
+	 			half_right_up();
+	 		else
+	 			half_right_down();
+	 		if(currentPosition.y==2){
 	 			while(currentPosition.y/4<(Y-2)){
 	 				while(currentPosition.x/4>0)
 	 					Lstep();
@@ -347,6 +493,7 @@ public class ZScanController extends Thread {
 	 				}
 	 			}
 	 		}
+	 		APT();
 	 	}
 
 //////////////////////////////////////////////////////////
@@ -364,7 +511,7 @@ public class ZScanController extends Thread {
 		 int i=0,j=0;
 
 		 initialKey();
-		 
+		  
 		 for (i=0; i<X/2; i++) {
 			 if ((i+1)>Math.floor(X/2) && ((X+1)/2)%2==1) {
 				 for (j=0; j<Y/2; j++) {
@@ -414,32 +561,7 @@ public class ZScanController extends Thread {
 				 if((currentPosition.x/4)<X-1) Rstep();
 			 }
 		 }
-		 
-//		 if(X%2==1 && Y%2==1){
-//			 if(X>Y){
-//				 bound = (int)(((X-3)/2)*4);
-//				 right(X, Y);
-//			 }
-//			 else{
-//				 bound = (int)(((Y-3)/2)*4);
-//				 down(X, Y);
-//			 }
-//		 }else  if(X%2==1 ){
-//			 bound = (int)(((Y-2)/2)*4);
-//			 down(X, Y);
-//		 }
-//		 else if(Y%2==1){
-//			 bound = (int)(((X-2)/2)*4);
-//			 right(X, Y);
-//		 }
-//		 else if(X>Y){
-//			 bound = (int)(((X-2)/2)*4);
-//			 right(X,Y);
-//		 }
-//		 else{
-//			 bound = (int)(((Y-2)/2)*4);
-//			 down(X, Y);
-//		 }
+		 APT();
 	 	}
 	 
 	 private void sigma(){
@@ -553,6 +675,7 @@ public class ZScanController extends Thread {
 			 right(X,Y);
 			 ZSdistance = distance;
 		 }
+		 APT();
 	 }
 
 	private void left(int X, int Y){
@@ -910,7 +1033,7 @@ public class ZScanController extends Thread {
 			 else 
 				 down((int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2)));
 				 //System.out.println((int) Math.ceil(Math.log(Y)/Math.log(2)));
-			 
+			 APT();
 		 }
 		
 		private int checkMBR(){
@@ -1095,7 +1218,7 @@ public class ZScanController extends Thread {
 				 else 
 					 ZCright((int) Math.ceil(Math.log(Math.max(X, Y))/Math.log(2)));
 					 //System.out.println((int) Math.ceil(Math.log(Y)/Math.log(2)));
-				 
+				 APT();
 			 }
 			
 			private int ZCcheckMBR(){//check whether every square is traveled

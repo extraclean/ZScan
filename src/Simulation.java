@@ -63,7 +63,7 @@ public class Simulation {//Prr
 	
 	public static double Rc(double rc){//高斯分佈Rc
 		Random n = new Random();
-		//return rc;
+//		return rc;
 		double tmp;
 		if((tmp = n.nextGaussian()*(0.5*rc)) > 0)
 			tmp = tmp * (-1);
@@ -72,10 +72,12 @@ public class Simulation {//Prr
 	
 	public static double PL(double d){//power loss (-RSSI) simulated RSSI
 		Random r = new Random();
-		return 55+10*3.3*(Math.log(d)/Math.log(10))+r.nextGaussian()*10+0;//標準差10，平均值0
+		return 55+10*3.3*(Math.log(d)/Math.log(10))+r.nextGaussian()*0.02*d+0;//標準差0.05d，平均值0
 	}
 
 	public static double R2D(double d){//RSSI to distance	(estimated distance)
+//		System.out.println(Math.pow(10, ((double)(PL(d)-55)/33)));
+//		System.out.println(d);
 		return Math.pow(10, ((double)(PL(d)-55)/33));
 		//return d;
 	}
@@ -86,7 +88,20 @@ public class Simulation {//Prr
 	
 	public static double step(){//the distance of truth table
 		//System.out.println(d);
-		double s = 0.5*ZScanController.Rc;//sqrt(2/5) ~= 0.632455, Rc = 10(m)
+		
+//		double s = 2*ZScanController.Rc;//out of range
+		
+//		double s = 1.5*ZScanController.Rc;
+		
+//		double s = 1*ZScanController.Rc;
+//		double s = (double)(2)/3*ZScanController.Rc;
+//		double s = 0.6324555*ZScanController.Rc;//sqrt(2/5) ~= 0.632455, Rc = 10(m)
+		double s = ZScanController.RD*ZScanController.Rc;//sqrt(2/5) ~= 0.632455, Rc = 10(m)
+//		double s = 0.5*ZScanController.Rc;
+		
+//		double s = (double)(2)/5*ZScanController.Rc;
+//		double s = (double)(1)/3*ZScanController.Rc;
+		
 		return s;
 	}
 	
@@ -117,15 +132,16 @@ public class Simulation {//Prr
 		double result=0;
 		double tmp = 0;
 		for(int i=0;i<ZScanController.sNumber;i++){
-			if(!Double.isNaN(Math.sqrt(Math.pow(ZScanController.sensor[i].getXe()-ZScanController.sensor[i].getX(), 2)+Math.pow(ZScanController.sensor[i].getYe()-ZScanController.sensor[i].getY(), 2)))){
-				tmp =  (double)Math.sqrt(Math.pow(ZScanController.sensor[i].getXe()-ZScanController.sensor[i].getX(), 2)-Math.pow(ZScanController.sensor[i].getYe()-ZScanController.sensor[i].getY(), 2))/ZScanController.Rc;
-				if(!Double.isNaN(tmp))
+			//if(!Double.isNaN(Math.sqrt(Math.pow(ZScanController.sensor[i].getXe()-ZScanController.sensor[i].getX(), 2)+Math.pow(ZScanController.sensor[i].getYe()-ZScanController.sensor[i].getY(), 2)))){
+				if(ZScanController.sensor[i].getXe() != -1){
+				tmp =  (double)Math.sqrt(Math.pow(ZScanController.sensor[i].getXe()-ZScanController.sensor[i].getX(), 2)+Math.pow(ZScanController.sensor[i].getYe()-ZScanController.sensor[i].getY(), 2))/ZScanController.Rc;
+				//if(!Double.isNaN(tmp))
 					result+=tmp;
-//				System.out.println(result);
+				//System.out.println(result);
 			}
 		}
 		//System.out.print("localization error rate: ");
-		return result/ZScanController.sNumber;//ZScanController.sNumber;
+		return (result/ZScanController.sNumber);//in unit of Rc
 	}
 	
 	public static double coverage(){//定位覆蓋率
@@ -140,7 +156,7 @@ public class Simulation {//Prr
 			}
 		}
 		//System.out.print("non-localized: ");
-		System.out.println((ZScanController.sNumber-count));
+		//System.out.println((ZScanController.sNumber-count));
 		//System.out.print("coverage rate: ");
 		//System.out.println(ZScanController.sNumber);
 		result = (double)count/ZScanController.sNumber;

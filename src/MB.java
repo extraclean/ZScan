@@ -1,5 +1,6 @@
+import java.util.Comparator;
 
-public class MB {
+public class MB implements Comparable<MB>{
 	public double x;
 	public double y; 
 	public double Rc;
@@ -34,20 +35,27 @@ public class MB {
 	public double getY(){
 		return y;
 	}	 
-	public double getX1(){
+	public double getX1(){//trilateration
 		return x1;
 	}
-	public double getY1(){
+	public double getY1(){//trilateration
 		return y1;
 	}	 
-	public double getX2(){
+	public double getX2(){//trilateration
 		return x2;
 	}
-	public double getY2(){
+	public double getY2(){//trilateration
 		return y2;
 	}
 	public void changeDistance(double d) {
 		this.distance = d;
-		
+	}
+	public double getDistance() {
+		return this.distance;
 	}	 
+	public int compareTo(MB compareDistance){
+		double compare = ((MB)compareDistance).getDistance();
+		return (int) (this.distance - compare);//ascending order
+		//return (int) (compare - this.distance);//descending order
+	}
 }

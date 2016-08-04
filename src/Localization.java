@@ -1,7 +1,18 @@
+import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Comparator;
 
 public class Localization {
 
+	static void collinearity(int i){
+		if(ZScanController.sensor[i].getXe() != 0){
+			double result0 = (double)(ZScanController.sensor[i].queue[0].getY()-ZScanController.sensor[i].queue[1].getY())/(ZScanController.sensor[i].queue[0].getX()-ZScanController.sensor[i].queue[1].getX());
+			double result1 = (double)(ZScanController.sensor[i].queue[2].getY()-ZScanController.sensor[i].queue[1].getY())/(ZScanController.sensor[i].queue[2].getX()-ZScanController.sensor[i].queue[1].getX());
+			if(result0 == result1)
+				ZScanController.collinear++;
+			}
+	}
+	
 	public static void WCL(int i){
 		double tmp1 = 0,tmp2 = 0,tmp3=0;
 		for(int n=0;n<3;n++){
@@ -15,12 +26,14 @@ public class Localization {
 	public static void APT(int i){
 		for(int n=0;n<ZScanController.sNumber;n++){
 			for(int m=0;m<100;m++){
+				if(ZScanController.sensor[n].queue[m].x == -1 || ZScanController.sensor[n].queue[m].y == -1){
+					ZScanController.sensor[n].queue[m].changeDistance(ZScanController.Rc*2);
+				}else
 				ZScanController.sensor[n].queue[m].changeDistance(Math.sqrt(Math.pow(ZScanController.sensor[n].queue[m].x-ZScanController.sensor[n].x,2)+Math.pow(ZScanController.sensor[n].queue[m].y-ZScanController.sensor[n].y,2)));
 			}
 		}
-		
-		ZScanController.sensor[i].queue.sort(
-	            Comparator.<MB>comparing(p -> p.distance));
+		Arrays.sort(ZScanController.sensor[i].queue);
+		TPT(i);
 	}
 	
 	public static void TPT(int i) {//TPT

@@ -7,6 +7,7 @@ public class Sensor {
 	public  double xe = -1; //計算位置
 	public  double ye = -1; //
 	public int timeout = 0;//以zs來說timeout=5要drop
+	public static int checkTimeout = 0;
 //	public Sensor estimate = new Sensor(0,0);//儲存定位計算過後的座標
 	
 	public Sensor(double x, double y) { 
@@ -29,9 +30,11 @@ public class Sensor {
 		this.qCount++;
 	}
 	public void drop(){
-		for(int i=0;i<100;i++)
+		for(int i=0;i<25;i++)
 			this.queue[i].ChangeData(0, 0);
 		qCount=0;
+		timeout = 0;
+		checkTimeout = 0;
 	}
 	public double getX(){
 		return x;
